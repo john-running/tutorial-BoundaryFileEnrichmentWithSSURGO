@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SSURGO ZIP Ingest (Local)</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; max-width: 980px; }
+      h1 { margin: 0 0 8px; }
+      .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 16px 0; }
+      label { display: block; font-weight: 600; margin: 8px 0 6px; }
+      input, select, button { font-size: 14px; padding: 8px; }
+      input[type="text"] { width: 320px; }
+      pre { background: #0b0f14; color: #d7e1ea; padding: 12px; border-radius: 10px; overflow: auto; max-height: 360px; }
+      .muted { color: #666; font-size: 13px; }
+      .status { font-weight: 700; }
+      .ok { color: #0a7a2a; }
+      .bad { color: #b00020; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    </style>
+  </head>
+  <body>
+    <h1>SSURGO ZIP Ingest (Local)</h1>
+    <div class="muted">
+      Upload a ZIP containing shapefile components (<span class="mono">.shp/.shx/.dbf/.prj</span>). The server extracts and processes it, stores results in SQLite, then deletes the uploaded files.
+    </div>
+
+    <div class="card">
+      <h2>Database</h2>
+      <div class="muted">
+        Results are stored in SQLite. You can download the DB file and open it with any SQLite browser.
+      </div>
+      <div style="margin-top: 10px;">
+        <a href="/db">Download SQLite DB</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Create Farm</h2>
+      <div class="row">
+        <div>
+          <label for="farmName">Farm name</label>
+          <input id="farmName" type="text" placeholder="Example: Purdue Demo Farm" />
+        </div>
+        <button id="createFarmBtn">Create</button>
+      </div>
+      <div id="createFarmMsg" class="muted"></div>
+    </div>
+
+    <div class="card">
+      <h2>Upload ZIP</h2>
+      <div class="row">
+        <div>
+          <label for="farmSelect">Farm</label>
+          <select id="farmSelect"></select>
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <a id="farmPageLink" href="#" class="mono">Open farm page</a>
+        </div>
+        <div>
+          <label for="zipFile">ZIP file</label>
+          <input id="zipFile" type="file" accept=".zip" />
+        </div>
+        <button id="uploadBtn">Upload & Run</button>
+      </div>
+      <div id="uploadMsg" class="muted"></div>
+      <div style="margin-top: 10px;">
+        <button id="loadLatestRunBtn">Load latest run for this farm</button>
+        <span id="latestRunMsg" class="muted"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Job Status</h2>
+      <div class="muted">
+        Job: <span id="jobId" class="mono"></span> &nbsp; Run: <span id="runId" class="mono"></span>
+      </div>
+      <div class="muted">
+        Status: <span id="jobStatus" class="status"></span>
+      </div>
+      <div style="margin-top: 10px;">
+        <button id="viewResultsBtn" disabled>View Run Results</button>
+      </div>
+      <h3>Logs</h3>
+      <pre id="logBox">(no logs yet)</pre>
+    </div>
+
+    <div class="card">
+      <h2>Run Results</h2>
+      <div class="muted">This shows per-shapefile summaries stored in SQLite for the run.</div>
+      <pre id="resultsBox">(no results yet)</pre>
+    </div>
+
+    <script>
+      const farmSelect = document.getElementById('farmSelect');
+      const farmPageLink = document.getElementById('farmPageLink');
+      const createFarmBtn = document.getElementById('createFarmBtn');
+      const farmName = document.getElementById('farmName');
+      const createFarmMsg = document.getElementById('createFarmMsg');
+
+      const uploadBtn = document.getElementById('uploadBtn');
+      const zipFile = document.getElementById('zipFile');
+      const uploadMsg = document.getElementById('uploadMsg');
+      const loadLatestRunBtn = document.getElementById('loadLatestRunBtn');
+      const latestRunMsg = document.getElementById('latestRunMsg');
+
+      const jobIdEl = document.getElementById('jobId');
+      const runIdEl = document.getElementById('runId');
+      const jobStatusEl = document.getElementById('jobStatus');
+      const logBox = document.getElementById('logBox');
+
+      const viewResultsBtn = document.getElementById('viewResultsBtn');
+      const resultsBox = document.getElementById('resultsBox');
+
+      let currentJobId = null;
+      let currentRunId = null;
+      let pollTimer = null;
+
+      async function api(path, opts={}) {
+        const headers = Object.assign({}, (opts.headers || {}));
+        if (!headers['Content-Type'] && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+        const res = await fetch(path, Object.assign({ headers }, opts));
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch (_) { data = { raw: text }; }
+        if (!res.ok) {
+          throw new Error((data && data.error) ? data.error : `HTTP ${res.status}`);
+        }
+        return data;
+      }
+
+      async function refreshFarms(selectId=null) {
+        const data = await api('/farms', { method: 'GET' });
+        const farms = data.farms || [];
+        farmSelect.innerHTML = '';
+        for (const f of farms) {
+          const opt = document.createElement('option');
+          opt.value = f.id;
+          opt.textContent = `${f.name} (${f.id.slice(0, 8)}…)`;
+          farmSelect.appendChild(opt);
+        }
+        if (selectId) farmSelect.value = selectId;
+        updateFarmLink();
+      }
+
+      function updateFarmLink() {
+        const id = farmSelect.value;
+        farmPageLink.href = id ? `/farms/${encodeURIComponent(id)}` : '#';
+      }
+
+      function setJobStatus(status) {
+        jobStatusEl.textContent = status || '';
+        jobStatusEl.classList.remove('ok', 'bad');
+        if (status === 'succeeded') jobStatusEl.classList.add('ok');
+        if (status === 'failed') jobStatusEl.classList.add('bad');
+      }
+
+      async function pollJob(jobId) {
+        const data = await api(`/jobs/${jobId}`, { method: 'GET' });
+        setJobStatus(data.status);
+        jobIdEl.textContent = jobId;
+        runIdEl.textContent = data.run_id || '';
+        currentRunId = data.run_id || currentRunId;
+
+        const lines = data.log || [];
+        logBox.textContent = lines.length ? lines.join('\n') : '(no logs yet)';
+
+        if (data.status === 'succeeded' || data.status === 'failed') {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          viewResultsBtn.disabled = !currentRunId;
+        }
+      }
+
+      async function loadRunResults(runId) {
+        const data = await api(`/runs/${runId}/results?parse=true`, { method: 'GET' });
+        resultsBox.textContent = JSON.stringify(data, null, 2);
+      }
+
+      async function loadFarmResults(farmId) {
+        if (!farmId) return;
+        const data = await api(`/farms/${farmId}/results?parse=true`, { method: 'GET' });
+        // Also update run id so the rest of the UI remains consistent
+        if (data.run_id) {
+          currentRunId = data.run_id;
+          runIdEl.textContent = data.run_id;
+          viewResultsBtn.disabled = false;
+        }
+        resultsBox.textContent = JSON.stringify(data, null, 2);
+      }
+
+      async function loadRun(runId) {
+        if (!runId) return;
+        currentRunId = runId;
+        runIdEl.textContent = runId;
+        viewResultsBtn.disabled = false;
+        try {
+          const data = await api(`/runs/${runId}`, { method: 'GET' });
+          const r = data.run || {};
+          setJobStatus(r.status || '');
+          const log = (r.log || '').trimEnd();
+          logBox.textContent = log ? log : '(no logs yet)';
+        } catch (e) {
+          // ignore
+        }
+        await loadRunResults(runId);
+      }
+
+      async function loadLatestRunForFarm(farmId) {
+        latestRunMsg.textContent = '';
+        if (!farmId) { latestRunMsg.textContent = 'Select a farm first.'; return; }
+        try {
+          const data = await api(`/farms/${farmId}/runs`, { method: 'GET' });
+          const runs = data.runs || [];
+          if (!runs.length) {
+            latestRunMsg.textContent = 'No runs yet for this farm.';
+            return;
+          }
+          const latest = runs[0];
+          await loadRun(latest.id);
+          latestRunMsg.textContent = `Loaded run ${latest.id.slice(0, 8)}… (${latest.status}).`;
+          setTimeout(() => { latestRunMsg.textContent = ''; }, 2000);
+        } catch (e) {
+          latestRunMsg.textContent = `Error: ${e.message}`;
+        }
+      }
+
+      createFarmBtn.addEventListener('click', async () => {
+        createFarmMsg.textContent = '';
+        const name = (farmName.value || '').trim();
+        if (!name) {
+          createFarmMsg.textContent = 'Please enter a farm name.';
+          return;
+        }
+        try {
+          const data = await api('/farms', { method: 'POST', body: JSON.stringify({ name }) });
+          createFarmMsg.textContent = `Created farm: ${data.farm.name}`;
+          farmName.value = '';
+          await refreshFarms(data.farm.id);
+        } catch (e) {
+          createFarmMsg.textContent = `Error: ${e.message}`;
+        }
+      });
+
+      uploadBtn.addEventListener('click', async () => {
+        uploadMsg.textContent = '';
+        resultsBox.textContent = '(no results yet)';
+        logBox.textContent = '(no logs yet)';
+        setJobStatus('');
+        viewResultsBtn.disabled = true;
+
+        const farmId = farmSelect.value;
+        const file = zipFile.files && zipFile.files[0];
+        if (!farmId) { uploadMsg.textContent = 'Create/select a farm first.'; return; }
+        if (!file) { uploadMsg.textContent = 'Choose a ZIP file first.'; return; }
+
+        const form = new FormData();
+        form.append('file', file);
+
+        try {
+          const res = await fetch(`/farms/${farmId}/ingest-upload`, { method: 'POST', body: form });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+          currentJobId = data.job_id;
+          currentRunId = data.run_id;
+          jobIdEl.textContent = currentJobId;
+          runIdEl.textContent = currentRunId;
+          setJobStatus(data.status);
+          try {
+            localStorage.setItem('last_farm_id', farmId);
+            localStorage.setItem('last_run_id', currentRunId);
+          } catch (_) {}
+
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = setInterval(() => pollJob(currentJobId).catch(err => { uploadMsg.textContent = `Poll error: ${err.message}`; }), 1500);
+          await pollJob(currentJobId);
+        } catch (e) {
+          uploadMsg.textContent = `Error: ${e.message}`;
+        }
+      });
+
+      viewResultsBtn.addEventListener('click', async () => {
+        if (!currentRunId) return;
+        try {
+          await loadRunResults(currentRunId);
+        } catch (e) {
+          resultsBox.textContent = `Error: ${e.message}`;
+        }
+      });
+
+      loadLatestRunBtn.addEventListener('click', async () => {
+        await loadLatestRunForFarm(farmSelect.value);
+      });
+
+      // When farm selection changes, show latest farm results (if any)
+      farmSelect.addEventListener('change', async () => {
+        updateFarmLink();
+        try {
+          await loadFarmResults(farmSelect.value);
+        } catch (_) {}
+      });
+
+      // initial load
+      (async () => {
+        try {
+          const lastFarmId = (localStorage.getItem('last_farm_id') || '').trim();
+          const lastRunId = (localStorage.getItem('last_run_id') || '').trim();
+          await refreshFarms(lastFarmId || null);
+          // Prefer restoring last run; if missing, show latest farm results.
+          if (lastRunId) await loadRun(lastRunId);
+          else if (farmSelect.value) await loadFarmResults(farmSelect.value);
+        } catch (e) {
+          farmSelect.innerHTML = '<option value=\"\">(no farms yet)</option>';
+        }
+      })();
+    </script>
+  </body>
+</html>
+

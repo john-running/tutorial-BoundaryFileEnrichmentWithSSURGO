@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Farm - {{ farm.name }}</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; max-width: 1200px; }
+      h1 { margin: 0 0 6px; }
+      .muted { color: #666; font-size: 13px; }
+      .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 16px 0; }
+      label { font-weight: 600; }
+      select, button { font-size: 14px; padding: 8px; }
+      pre { background: #0b0f14; color: #d7e1ea; padding: 12px; border-radius: 10px; overflow: auto; max-height: 520px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th, td { border-bottom: 1px solid #eee; text-align: left; padding: 8px; vertical-align: top; }
+      th { background: #fafafa; position: sticky; top: 0; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      a { color: #1a73e8; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <div class="row" style="justify-content: space-between;">
+      <div>
+        <h1>{{ farm.name }}</h1>
+        <div class="muted">farm_id: <span class="mono">{{ farm.id }}</span></div>
+      </div>
+      <div class="row">
+        <a href="/">Home</a>
+        <a href="/db">Download DB</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Runs</h2>
+      <div class="row">
+        <label for="runSelect">Select run</label>
+        <select id="runSelect"></select>
+        <button id="refreshBtn">Refresh</button>
+      </div>
+      <div class="muted" id="runMeta"></div>
+      <h3>Run log</h3>
+      <pre id="logBox">(no log yet)</pre>
+    </div>
+
+    <div class="card">
+      <h2>Results</h2>
+      <div class="muted">Latest results for the selected run.</div>
+      <div style="overflow:auto; max-height: 420px;">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Shape file</th>
+              <th>Area (ac)</th>
+              <th>HUC12</th>
+              <th>Slope %</th>
+              <th>OM (0-20)</th>
+              <th>K_surface</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h3>Raw JSON (for copying)</h3>
+      <pre id="rawBox">(no results yet)</pre>
+    </div>
+
+    <script>
+      const FARM_ID = "{{ farm.id }}";
+      const runSelect = document.getElementById('runSelect');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const runMeta = document.getElementById('runMeta');
+      const logBox = document.getElementById('logBox');
+      const rawBox = document.getElementById('rawBox');
+      const resultsTableBody = document.querySelector('#resultsTable tbody');
+
+      async function api(path) {
+        const res = await fetch(path);
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch (_) { data = { raw: text }; }
+        if (!res.ok) throw new Error((data && data.error) ? data.error : `HTTP ${res.status}`);
+        return data;
+      }
+
+      function fmt(x, digits=2) {
+        if (x === null || x === undefined) return '';
+        const n = Number(x);
+        if (Number.isFinite(n)) return n.toFixed(digits);
+        return String(x);
+      }
+
+      function safeGet(obj, path, fallback=null) {
+        try {
+          let cur = obj;
+          for (const key of path) {
+            if (cur == null) return fallback;
+            cur = cur[key];
+          }
+          return (cur === undefined) ? fallback : cur;
+        } catch (_) { return fallback; }
+      }
+
+      function deriveFieldName(resultRow) {
+        const bm = resultRow.boundary_meta_json || {};
+        const idf = safeGet(bm, ['id_fields'], {}) || {};
+        const keys = ['FIELD', 'FIELD_NAME', 'FIELDNAME', 'field', 'Field'];
+        for (const k of keys) {
+          const v = idf[k];
+          if (v !== null && v !== undefined) {
+            const s = String(v).trim();
+            if (s) return s;
+          }
+        }
+        // Fallback to shapefile base name
+        const sf = String(resultRow.shape_file || safeGet(bm, ['file_name'], '') || '').trim();
+        return sf.replace(/\.shp$/i, '');
+      }
+
+      function renderResults(results) {
+        resultsTableBody.innerHTML = '';
+        for (const r of (results || [])) {
+          const bm = r.boundary_meta_json || {};
+          const huc = r.huc_json || {};
+          const sum = r.summary_json || {};
+
+          const fieldName = deriveFieldName(r);
+          const areaAc = safeGet(bm, ['area_acres'], null);
+          const huc12 = safeGet(huc, ['huc12','code'], '');
+          const slope = safeGet(sum, ['area_weighted','slope_pct'], null);
+          const om = safeGet(sum, ['area_weighted','om_0_20'], null);
+          const ksurf = safeGet(sum, ['area_weighted','K_surface'], null);
+          const sw = safeGet(bm, ['surface_water_proximity','surface_water_proximal'], null);
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${fieldName}</td>
+            <td class="mono">${r.shape_file || ''}</td>
+            <td>${fmt(areaAc, 2)}</td>
+            <td class="mono">${huc12 || ''}</td>
+            <td>${fmt(slope, 3)}</td>
+            <td>${fmt(om, 3)}</td>
+            <td>${fmt(ksurf, 3)}</td>
+            <td>${sw === null ? '' : (sw ? 'Near water' : 'Not near water')}</td>
+          `;
+          resultsTableBody.appendChild(tr);
+        }
+      }
+
+      async function loadRunsAndResults(preferRunId=null) {
+        const url = `/farms/${encodeURIComponent(FARM_ID)}/results?parse=true` + (preferRunId ? `&run_id=${encodeURIComponent(preferRunId)}` : '');
+        const data = await api(url);
+
+        const runs = data.runs || [];
+        runSelect.innerHTML = '';
+        for (const run of runs) {
+          const opt = document.createElement('option');
+          opt.value = run.id;
+          opt.textContent = `${run.created_at} — ${run.status} — ${run.original_zip_name || ''} (${run.id.slice(0,8)}…)`;
+          runSelect.appendChild(opt);
+        }
+        if (data.run_id) runSelect.value = data.run_id;
+
+        runMeta.textContent = `run_id: ${data.run_id || ''}`;
+        renderResults(data.results || []);
+        rawBox.textContent = JSON.stringify(data, null, 2);
+
+        // Fetch run log separately (includes full log field)
+        if (data.run_id) {
+          try {
+            const rd = await api(`/runs/${encodeURIComponent(data.run_id)}`);
+            const log = (rd.run && rd.run.log) ? String(rd.run.log).trimEnd() : '';
+            logBox.textContent = log ? log : '(no log yet)';
+          } catch (e) {
+            logBox.textContent = `(could not load run log: ${e.message})`;
+          }
+        }
+      }
+
+      refreshBtn.addEventListener('click', async () => {
+        await loadRunsAndResults(runSelect.value || null);
+      });
+      runSelect.addEventListener('change', async () => {
+        await loadRunsAndResults(runSelect.value);
+      });
+
+      // initial load
+      loadRunsAndResults().catch(err => {
+        rawBox.textContent = `Error: ${err.message}`;
+      });
+    </script>
+  </body>
+</html>
+

@@ -1,0 +1,92 @@
+### Environment files
+.env
+.env.*
+.envrc
+.python-version
+
+### Virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+### OS/Editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.ropeproject/
+
+### Python bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+
+### Packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+pip-wheel-metadata/
+
+### Testing / coverage
+.pytest_cache/
+.coverage*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+### Type checking / linters
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+
+### Jupyter
+.ipynb_checkpoints/
+.jupyter/lab/workspaces/
+
+### Project outputs
+results/
+tmp/
+.cache/
+data/tmp/
+data/boundaryFiles/
+data/*.db
+*.db
+
+### Geospatial artifacts (ignored globally, except under data/fields)
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.sbn
+*.sbx
+*.qix
+*.fix
+*.xml
+*.gpkg
+*.gdb
+*.tif
+*.tiff
+*.ovr
+*.aux.xml
+*.tfw
+
+# Re-include shapefile components in data/fields
+!/data/fields/**/*.shp
+!/data/fields/**/*.shx
+!/data/fields/**/*.dbf
+!/data/fields/**/*.prj
+!/data/fields/**/*.cpg
+!/data/fields/**/*.sbn
+!/data/fields/**/*.sbx
+!/data/fields/**/*.qix
+!/data/fields/**/*.fix
+!/data/fields/**/*.xml

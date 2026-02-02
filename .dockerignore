@@ -1,0 +1,12 @@
+.venv*
+__pycache__
+*.pyc
+.git
+.gitignore
+*.log
+results/
+data/
+!data/R-Factor_CONUS.tif
+*.zip
+.DS_Store
+
