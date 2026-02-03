@@ -10,12 +10,28 @@ This project ingests field boundary shapefiles and computes soil + hydrologic co
 
 ## Quickstart (Docker)
 
+Recommended (one command, persists DB to `./data/`):
+
+```bash
+docker compose up --build
+```
+
+Or, if you have `make`:
+
+```bash
+make up
+```
+
+Then open `http://localhost:8080/`.
+
+---
+
+Alternative (no compose; ephemeral DB):
+
 ```bash
 docker build -t ssurgo-local .
 docker run --rm -p 8080:8080 ssurgo-local
 ```
-
-Then open `http://localhost:8080/`.
 
 Optional: persist the SQLite file on your host during local development:
 
@@ -26,7 +42,7 @@ docker run --rm -p 8080:8080 -v "$(pwd)/data:/app/data" ssurgo-local
 
 ---
 
-## Quickstart (Python)
+## Optional (advanced): Quickstart (Python)
 
 ```bash
 python3 -m venv .venv
@@ -97,7 +113,7 @@ If you have a GeoTIFF for RUSLE R-factor, set:
 
 If not set, R-factor enrichment is skipped (everything else still runs).
 
-Note: the default install does **not** include `rasterio` to keep installs simple across machines. If you want R-factor enabled in a local Python environment, install it separately:
+Note: the default **Docker** image includes Rasterio so R-factor can run there. For a local Python environment, the default install does **not** include `rasterio` to keep installs simple across machines; install it separately if you want R-factor enabled:
 
 ```bash
 pip install rasterio
@@ -115,6 +131,7 @@ pip install rasterio
 ├── ssurgo_ingest_to_sqlite.py   # Ingest loop → writes results to SQLite
 ├── fetch_zip_and_ingest.py      # Optional CLI: download ZIP by URL then ingest into SQLite
 ├── db/sqlite_store.py           # SQLite schema + helpers
+├── docs/PIPELINE_WALKTHROUGH.md # Pipeline explanation + diagrams
 └── ssurgo/                      # Core pipeline modules
 ```
 

@@ -5,69 +5,98 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Farm - {{ farm.name }}</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; max-width: 1200px; }
-      h1 { margin: 0 0 6px; }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        margin: 0;
+        color: #111;
+        background: #fff;
+      }
+      .container { max-width: 1100px; margin: 0 auto; padding: 18px 16px 36px; }
+      header { display:flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+      h1 { margin: 0; font-size: 20px; }
       .muted { color: #666; font-size: 13px; }
-      .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
-      .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 16px 0; }
-      label { font-weight: 600; }
+      a { color: #0b57d0; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      .section { border: 1px solid #e5e5e5; border-radius: 10px; padding: 14px; margin: 14px 0; }
+      .section h2 { margin: 0 0 10px; font-size: 16px; }
+      label { font-weight: 600; font-size: 13px; }
       select, button { font-size: 14px; padding: 8px; }
-      pre { background: #0b0f14; color: #d7e1ea; padding: 12px; border-radius: 10px; overflow: auto; max-height: 520px; }
+      pre { background: #0b0f14; color: #d7e1ea; padding: 10px; border-radius: 10px; overflow: auto; max-height: 520px; }
       table { width: 100%; border-collapse: collapse; margin-top: 10px; }
       th, td { border-bottom: 1px solid #eee; text-align: left; padding: 8px; vertical-align: top; }
       th { background: #fafafa; position: sticky; top: 0; }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-      a { color: #1a73e8; text-decoration: none; }
-      a:hover { text-decoration: underline; }
+      tbody tr:hover { background: #f6f8ff; }
+      .twoCol { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 980px){ .twoCol{ grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
-    <div class="row" style="justify-content: space-between;">
-      <div>
-        <h1>{{ farm.name }}</h1>
-        <div class="muted">farm_id: <span class="mono">{{ farm.id }}</span></div>
-      </div>
-      <div class="row">
-        <a href="/">Home</a>
-        <a href="/db">Download DB</a>
-      </div>
-    </div>
+    <div class="container">
+      <header>
+        <div>
+          <h1>{{ farm.name }}</h1>
+          <div class="muted">farm_id: <span class="mono">{{ farm.id }}</span></div>
+        </div>
+        <div class="row">
+          <a href="/">Home</a>
+          <a href="/db">Download DB</a>
+        </div>
+      </header>
 
-    <div class="card">
-      <h2>Runs</h2>
-      <div class="row">
-        <label for="runSelect">Select run</label>
-        <select id="runSelect"></select>
-        <button id="refreshBtn">Refresh</button>
+      <div class="section">
+        <h2>Runs</h2>
+        <div class="row">
+          <label for="runSelect">Select run</label>
+          <select id="runSelect"></select>
+          <button id="refreshBtn">Refresh</button>
+          <span class="muted">run_id:</span> <span id="runMeta" class="mono"></span>
+        </div>
+        <h3 style="margin: 14px 0 8px;">Run log</h3>
+        <pre id="logBox">(no log yet)</pre>
       </div>
-      <div class="muted" id="runMeta"></div>
-      <h3>Run log</h3>
-      <pre id="logBox">(no log yet)</pre>
-    </div>
 
-    <div class="card">
-      <h2>Results</h2>
-      <div class="muted">Latest results for the selected run.</div>
-      <div style="overflow:auto; max-height: 420px;">
-        <table id="resultsTable">
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th>Shape file</th>
-              <th>Area (ac)</th>
-              <th>HUC12</th>
-              <th>Slope %</th>
-              <th>OM (0-20)</th>
-              <th>K_surface</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div class="section">
+        <h2>Results</h2>
+        <div class="muted">Click a row to show details.</div>
+        <div style="overflow:auto; max-height: 460px;">
+          <table id="resultsTable">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Area (ac)</th>
+                <th>HUC12</th>
+                <th>Slope %</th>
+                <th>OM (0-20)</th>
+                <th>K_surface</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-      <h3>Raw JSON (for copying)</h3>
-      <pre id="rawBox">(no results yet)</pre>
-    </div>
+
+      <div class="section">
+        <h2>Selected record</h2>
+        <div class="muted" id="selLabel">(none)</div>
+        <div class="twoCol" style="margin-top: 10px;">
+          <div>
+            <h3 style="margin: 0 0 8px;">Summary</h3>
+            <pre id="selSummary">(select a row)</pre>
+          </div>
+          <div>
+            <h3 style="margin: 0 0 8px;">Boundary meta</h3>
+            <pre id="selBoundary">(select a row)</pre>
+          </div>
+        </div>
+        <h3 style="margin: 12px 0 8px;">HUC</h3>
+        <pre id="selHuc">(select a row)</pre>
+        <h3 style="margin: 12px 0 8px;">Raw JSON (farm payload)</h3>
+        <pre id="rawBox">(no results yet)</pre>
+      </div>
 
     <script>
       const FARM_ID = "{{ farm.id }}";
@@ -77,6 +106,10 @@
       const logBox = document.getElementById('logBox');
       const rawBox = document.getElementById('rawBox');
       const resultsTableBody = document.querySelector('#resultsTable tbody');
+      const selLabel = document.getElementById('selLabel');
+      const selSummary = document.getElementById('selSummary');
+      const selBoundary = document.getElementById('selBoundary');
+      const selHuc = document.getElementById('selHuc');
 
       async function api(path) {
         const res = await fetch(path);
@@ -137,9 +170,9 @@
           const sw = safeGet(bm, ['surface_water_proximity','surface_water_proximal'], null);
 
           const tr = document.createElement('tr');
+          tr.style.cursor = 'pointer';
           tr.innerHTML = `
             <td>${fieldName}</td>
-            <td class="mono">${r.shape_file || ''}</td>
             <td>${fmt(areaAc, 2)}</td>
             <td class="mono">${huc12 || ''}</td>
             <td>${fmt(slope, 3)}</td>
@@ -147,6 +180,12 @@
             <td>${fmt(ksurf, 3)}</td>
             <td>${sw === null ? '' : (sw ? 'Near water' : 'Not near water')}</td>
           `;
+          tr.addEventListener('click', () => {
+            selLabel.textContent = fieldName;
+            selSummary.textContent = JSON.stringify(sum || {}, null, 2);
+            selBoundary.textContent = JSON.stringify(bm || {}, null, 2);
+            selHuc.textContent = JSON.stringify(huc || {}, null, 2);
+          });
           resultsTableBody.appendChild(tr);
         }
       }
@@ -165,7 +204,7 @@
         }
         if (data.run_id) runSelect.value = data.run_id;
 
-        runMeta.textContent = `run_id: ${data.run_id || ''}`;
+        runMeta.textContent = `${data.run_id || ''}`;
         renderResults(data.results || []);
         rawBox.textContent = JSON.stringify(data, null, 2);
 
@@ -193,6 +232,7 @@
         rawBox.textContent = `Error: ${err.message}`;
       });
     </script>
+    </div>
   </body>
 </html>
 

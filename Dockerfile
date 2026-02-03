@@ -1,8 +1,8 @@
 FROM python:3.11-slim
 
-# System deps helpful for rasterio wheels and SSL
+# System deps (GDAL + Rasterio) and SSL
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates gdal-bin libgdal-dev && \
+    ca-certificates gdal-bin libgdal-dev python3-rasterio && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

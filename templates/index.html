@@ -5,92 +5,105 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SSURGO ZIP Ingest (Local)</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; max-width: 980px; }
-      h1 { margin: 0 0 8px; }
-      .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; }
-      .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 16px 0; }
-      label { display: block; font-weight: 600; margin: 8px 0 6px; }
-      input, select, button { font-size: 14px; padding: 8px; }
-      input[type="text"] { width: 320px; }
-      pre { background: #0b0f14; color: #d7e1ea; padding: 12px; border-radius: 10px; overflow: auto; max-height: 360px; }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        margin: 0;
+        color: #111;
+        background: #fff;
+      }
+      .container { max-width: 980px; margin: 0 auto; padding: 18px 16px 36px; }
+      header { display:flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+      h1 { margin: 0; font-size: 22px; }
       .muted { color: #666; font-size: 13px; }
+      a { color: #0b57d0; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .section { border: 1px solid #e5e5e5; border-radius: 10px; padding: 14px; margin: 14px 0; }
+      .section h2 { margin: 0 0 10px; font-size: 16px; }
+      .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+      label { display:block; font-weight: 600; margin: 6px 0 6px; font-size: 13px; }
+      input, select, button { font-size: 14px; padding: 8px; }
+      input[type="text"] { width: 320px; max-width: 100%; }
+      button { cursor: pointer; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      pre { background: #0b0f14; color: #d7e1ea; padding: 10px; border-radius: 10px; overflow: auto; max-height: 360px; }
       .status { font-weight: 700; }
       .ok { color: #0a7a2a; }
       .bad { color: #b00020; }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      .rightLinks { display:flex; gap: 10px; flex-wrap: wrap; }
     </style>
   </head>
   <body>
-    <h1>SSURGO ZIP Ingest (Local)</h1>
-    <div class="muted">
-      Upload a ZIP containing shapefile components (<span class="mono">.shp/.shx/.dbf/.prj</span>). The server extracts and processes it, stores results in SQLite, then deletes the uploaded files.
-    </div>
-
-    <div class="card">
-      <h2>Database</h2>
-      <div class="muted">
-        Results are stored in SQLite. You can download the DB file and open it with any SQLite browser.
-      </div>
-      <div style="margin-top: 10px;">
-        <a href="/db">Download SQLite DB</a>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Create Farm</h2>
-      <div class="row">
+    <div class="container">
+      <header>
         <div>
-          <label for="farmName">Farm name</label>
-          <input id="farmName" type="text" placeholder="Example: Purdue Demo Farm" />
+          <h1>SSURGO ZIP Ingest (Local)</h1>
+          <div class="muted">
+            Upload a ZIP containing shapefile components (<span class="mono">.shp/.shx/.dbf/.prj</span>). The server extracts and processes it, stores results in SQLite, then deletes uploaded files.
+          </div>
         </div>
-        <button id="createFarmBtn">Create</button>
-      </div>
-      <div id="createFarmMsg" class="muted"></div>
-    </div>
+        <div class="rightLinks">
+          <a href="/db">Download DB</a>
+          <a href="/health">Health</a>
+        </div>
+      </header>
 
-    <div class="card">
-      <h2>Upload ZIP</h2>
-      <div class="row">
-        <div>
-          <label for="farmSelect">Farm</label>
-          <select id="farmSelect"></select>
+      <div class="section">
+        <h2>Create farm</h2>
+        <div class="row">
+          <div>
+            <label for="farmName">Farm name</label>
+            <input id="farmName" type="text" placeholder="Example: Purdue Demo Farm" />
+          </div>
+          <button id="createFarmBtn">Create</button>
         </div>
-        <div>
-          <label>&nbsp;</label>
-          <a id="farmPageLink" href="#" class="mono">Open farm page</a>
-        </div>
-        <div>
-          <label for="zipFile">ZIP file</label>
-          <input id="zipFile" type="file" accept=".zip" />
-        </div>
-        <button id="uploadBtn">Upload & Run</button>
+        <div id="createFarmMsg" class="muted"></div>
       </div>
-      <div id="uploadMsg" class="muted"></div>
-      <div style="margin-top: 10px;">
-        <button id="loadLatestRunBtn">Load latest run for this farm</button>
-        <span id="latestRunMsg" class="muted"></span>
-      </div>
-    </div>
 
-    <div class="card">
-      <h2>Job Status</h2>
-      <div class="muted">
-        Job: <span id="jobId" class="mono"></span> &nbsp; Run: <span id="runId" class="mono"></span>
+      <div class="section">
+        <h2>Upload ZIP</h2>
+        <div class="row">
+          <div>
+            <label for="farmSelect">Farm</label>
+            <select id="farmSelect"></select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <a id="farmPageLink" href="#" class="mono">Open farm page</a>
+          </div>
+          <div>
+            <label for="zipFile">ZIP file</label>
+            <input id="zipFile" type="file" accept=".zip" />
+          </div>
+          <button id="uploadBtn">Upload & Run</button>
+        </div>
+        <div id="uploadMsg" class="muted"></div>
+        <div class="row" style="margin-top: 10px;">
+          <button id="loadLatestRunBtn">Load latest run</button>
+          <span id="latestRunMsg" class="muted"></span>
+        </div>
       </div>
-      <div class="muted">
-        Status: <span id="jobStatus" class="status"></span>
-      </div>
-      <div style="margin-top: 10px;">
-        <button id="viewResultsBtn" disabled>View Run Results</button>
-      </div>
-      <h3>Logs</h3>
-      <pre id="logBox">(no logs yet)</pre>
-    </div>
 
-    <div class="card">
-      <h2>Run Results</h2>
-      <div class="muted">This shows per-shapefile summaries stored in SQLite for the run.</div>
-      <pre id="resultsBox">(no results yet)</pre>
+      <div class="section">
+        <h2>Job status</h2>
+        <div class="row" style="align-items:center;">
+          <span class="muted">Job:</span> <span id="jobId" class="mono"></span>
+          <span class="muted">Run:</span> <span id="runId" class="mono"></span>
+          <span class="muted">Status:</span> <span id="jobStatus" class="status"></span>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <button id="viewResultsBtn" disabled>View run results</button>
+        </div>
+        <h3 style="margin: 14px 0 8px;">Logs</h3>
+        <pre id="logBox">(no logs yet)</pre>
+      </div>
+
+      <div class="section">
+        <h2>Results</h2>
+        <div class="muted">Latest run for selected farm, or the selected run.</div>
+        <pre id="resultsBox">(no results yet)</pre>
+      </div>
     </div>
 
     <script>
