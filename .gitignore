@@ -79,6 +79,11 @@ data/*.db
 *.aux.xml
 *.tfw
 
+# Keep bundled R-factor files (used by Docker default)
+!/data/R-Factor_CONUS.tif
+!/data/R-Factor_CONUS.tiff
+!/data/R-Factor_CONUS.prj
+
 # Re-include shapefile components in data/fields
 !/data/fields/**/*.shp
 !/data/fields/**/*.shx
